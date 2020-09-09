@@ -121,7 +121,6 @@ impl Node {
 
 impl Ast {
     pub fn make(lexemes: Vec<Tokens>) -> Self {
-        println!("{:?}", lexemes);
         let mut peekable = lexemes.into_iter().peekable();
         let mut head = Ast::new_head();
         let mut context = Context::new(None);
