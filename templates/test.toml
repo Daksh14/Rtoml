@@ -1,2 +1,2 @@
 [some_table]
-array_of_inline_table = [1,2,3,2.2]
+some_val = "hello\u0008world"

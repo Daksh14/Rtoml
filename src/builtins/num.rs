@@ -40,16 +40,14 @@ impl TomlNum {
         }
         if let Ok(bit64_int) = final_num.parse::<i64>() {
             TomlValue::Int(bit64_int)
-        } else {
-            if dot_count > 0 {
-                if let Ok(floating) = final_num.parse::<f64>() {
-                    TomlValue::Floating(floating)
-                } else {
-                    comp_err!("Error in parsing integer");
-                }
+        } else if dot_count > 0 {
+            if let Ok(floating) = final_num.parse::<f64>() {
+                TomlValue::Floating(floating)
             } else {
                 comp_err!("Error in parsing integer");
             }
+        } else {
+            comp_err!("Error in parsing integer");
         }
     }
 
@@ -65,7 +63,7 @@ impl TomlNum {
                 '.' => {
                     peekable.next();
                     // check if there's a number after the `.` dot
-                    if let Some(_) = peekable.peek() {
+                    if peekable.peek().is_some() {
                         let num = peekable.next().unwrap();
                         if num.is_numeric() {
                             num_type = Some(Types::Floating);
@@ -84,7 +82,7 @@ impl TomlNum {
                 }
                 _ => {
                     if chars.is_numeric() {
-                        if let None = num_type {
+                        if num_type.is_none() {
                             num_type = Some(Types::Int);
                         }
                     } else {
@@ -99,5 +97,33 @@ impl TomlNum {
         } else {
             comp_err!("Error in parsing num");
         }
+    }
+}
+
+#[cfg(test)]
+pub mod test {
+    use super::*;
+
+    #[test]
+    pub fn basic_ints() {
+        let num = TomlNum::handle("1".to_string());
+        assert_eq!(num, TomlValue::Int(1));
+    }
+
+    #[test]
+    pub fn basic_floating() {
+        let num = TomlNum::handle("1.1".to_string());
+        assert_eq!(num, TomlValue::Floating(1.1));
+    }
+
+    #[test]
+    pub fn undersoce_seperated() {
+        let num = TomlNum::handle("1_1_111_22".to_string());
+        assert_eq!(num, TomlValue::Int(1111122));
+    }
+    #[test]
+    pub fn undersoce_seperated_floating() {
+        let num = TomlNum::handle("1_1_11.1_22".to_string());
+        assert_eq!(num, TomlValue::Floating(1111.122));
     }
 }

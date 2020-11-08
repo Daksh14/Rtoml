@@ -22,6 +22,7 @@ pub enum Tokens {
     LineBreak,
     TripleDoubleQuotes,
     TripleSingleQuotes,
+    BackSlash,
     Comma,
 }
 
@@ -47,6 +48,7 @@ impl ToString for Tokens {
             Tokens::SingleQuote => "'",
             Tokens::LineBreak => "\\n",
             Tokens::TripleSingleQuotes => "'''",
+            Tokens::BackSlash => "\\",
         })
     }
 }
@@ -109,12 +111,18 @@ impl Lexer {
                 b']' => literal_check!(context, Tokens::Sbc.as_char(), peekable, {
                     push!(lexemes, context, Tokens::Sbc, peekable);
                 }),
-                b'{' => literal_check!(context, Tokens::Cbo.as_char(), peekable, {
-                    push!(lexemes, context, Tokens::Cbo, peekable);
-                }),
-                b'}' => literal_check!(context, Tokens::Cbc.as_char(), peekable, {
-                    push!(lexemes, context, Tokens::Cbc, peekable);
-                }),
+                b'{' => {
+                    context.inline_table_context = true;
+                    literal_check!(context, Tokens::Cbo.as_char(), peekable, {
+                        push!(lexemes, context, Tokens::Cbo, peekable);
+                    })
+                }
+                b'}' => {
+                    context.inline_table_context = false;
+                    literal_check!(context, Tokens::Cbc.as_char(), peekable, {
+                        push!(lexemes, context, Tokens::Cbc, peekable);
+                    })
+                }
                 // symbols
                 b'=' => literal_check!(context, Tokens::Eq.as_char(), peekable, {
                     push!(lexemes, context, Tokens::Eq, peekable);
@@ -156,13 +164,23 @@ impl Lexer {
                 b'\n' => {
                     push!(lexemes, context, Tokens::LineBreak, peekable);
                 }
+                b'\\' => {
+                    push!(lexemes, context, Tokens::BackSlash, peekable);
+                    if let Some(x) = peekable.peek() {
+                        lexemes.push(Tokens::Literal((*x as char).to_string()));
+                        peekable.next();
+                    }
+                }
                 b' ' => {
-                    if context.is_literal_context() || context.is_int_context() {
+                    if (context.is_literal_context() || context.is_int_context())
+                        && !context.is_inline_table_context()
+                        && context.is_int_context()
+                        || context.is_literal_context()
+                    {
                         context.push(' ');
                     }
                     peekable.next();
                 }
-                // anything else
                 _ => {
                     if (*val as char).is_numeric() {
                         context.int_context = true;
@@ -174,7 +192,7 @@ impl Lexer {
         if !context.is_empty() {
             lexemes.push(context.get_literal());
         }
-        println!("{:#?}", lexemes);
+        println!("{:?}", lexemes);
         lexemes
     }
 }
@@ -191,6 +209,21 @@ pub mod test {
                 Tokens::Literal("value".to_string()),
                 Tokens::Eq,
                 Tokens::Literal("1".to_string())
+            ],
+            Lexer::lex(string.to_vec())
+        );
+    }
+
+    #[test]
+    pub fn spaces_after_nums() {
+        let string = b"{ value = 1 }";
+        assert_eq!(
+            vec![
+                Tokens::Cbo,
+                Tokens::Literal("value".to_string()),
+                Tokens::Eq,
+                Tokens::Literal("1".to_string()),
+                Tokens::Cbc
             ],
             Lexer::lex(string.to_vec())
         );

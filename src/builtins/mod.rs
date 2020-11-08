@@ -86,9 +86,10 @@ impl Types {
 #[cfg(test)]
 pub mod tests {
     use super::*;
+
     #[test]
     pub fn bool_type() {
-        let bool_type = Types::get_type("true").unwrap();
-        assert_eq!(Types::Boolean, bool_type);
+        assert_eq!(Types::Boolean, Types::get_type("true").unwrap());
+        assert_eq!(Types::Boolean, Types::get_type("false").unwrap());
     }
 }

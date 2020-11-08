@@ -3,6 +3,7 @@ use crate::lexer::Tokens;
 pub struct Context {
     pub int_context: bool,
     pub literal_context: bool,
+    pub inline_table_context: bool,
     pub literal: String,
 }
 
@@ -11,6 +12,7 @@ impl Context {
         Self {
             int_context: false,
             literal_context: false,
+            inline_table_context: false,
             literal: String::new(),
         }
     }
@@ -23,6 +25,9 @@ impl Context {
     }
     pub fn is_literal_context(&self) -> bool {
         self.literal_context
+    }
+    pub fn is_inline_table_context(&self) -> bool {
+        self.inline_table_context
     }
     pub fn push(&mut self, unit: char) {
         self.literal.push(unit);

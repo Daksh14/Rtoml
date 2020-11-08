@@ -75,7 +75,7 @@ impl Reader {
     pub fn get_table_array(&self, table_name: &str) -> HashMap<String, Vec<TomlValue>> {
         let current_child = &self.syntax_tree.child;
         let mut val = HashMap::new();
-        for nodes in current_child.into_iter() {
+        for nodes in current_child.iter() {
             if let HeadOption::TableArr(x) = &nodes.item {
                 if x == table_name {
                     if let HeadOption::Some(content) = &nodes.child[0].item {

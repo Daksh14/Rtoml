@@ -26,11 +26,9 @@ impl TableArrayContext {
         }
     }
     pub fn has_table(&self, table_name: &str) -> bool {
-        self.iter()
-            .find(|e| *e.0 == table_name.to_string())
-            .is_some()
+        self.iter().any(|e| *e.0 == table_name)
     }
-    pub fn set_value(&mut self, key: &String, value: TomlValue, for_table: String) {
+    pub fn set_value(&mut self, key: &str, value: TomlValue, for_table: String) {
         if let Some(x) = self.tables.get_mut(&for_table) {
             if let Some(y) = x.get_mut(key) {
                 y.push(value);
@@ -74,16 +72,12 @@ impl Context {
             key_value: HashMap::new(),
         }
     }
-    pub fn set_value(&mut self, key: &String, value: TomlValue) {
+    pub fn set_value(&mut self, key: &str, value: TomlValue) {
         self.key_value.insert(key.to_owned(), value);
     }
     pub fn has_context(&self) -> bool {
         if self.table_name.is_some() {
-            if self.key_value.len() > 0 {
-                true
-            } else {
-                false
-            }
+            !self.key_value.is_empty()
         } else {
             false
         }

@@ -18,19 +18,16 @@ pub enum HeadOption<T> {
 
 impl<T> HeadOption<T> {
     pub fn is_some(&self) -> bool {
-        if let HeadOption::None = self {
-            false
-        } else {
-            true
-        }
+        !matches!(self, HeadOption::None)
     }
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum ParsingError {
     MissingIdentifier(String),
     // Expected .0 found .1
     Expected(String, String),
+    StringErr(u8, String),
     // wrong type.0, correct type.1
     TypeError(String, String),
 }
@@ -134,7 +131,7 @@ impl Ast {
                 }
                 Some(Tokens::Literal(_)) => {
                     let identifier = peekable.next().unwrap().to_string();
-                    if let Some(x) = identifier.chars().nth(0) {
+                    if let Some(x) = identifier.chars().next() {
                         if x.is_numeric() {
                             return Err(ParsingError::Expected(
                                 "String".to_string(),
@@ -151,10 +148,8 @@ impl Ast {
                     let value = Types::handle_value(&mut peekable)?;
                     if !table_array.context_is_valid() {
                         context.set_value(&identifier, value);
-                    } else {
-                        if let Some(ref x) = context.table_name {
-                            table_array.set_value(&identifier, value, x.to_string());
-                        }
+                    } else if let Some(ref x) = context.table_name {
+                        table_array.set_value(&identifier, value, x.to_string());
                     }
                 }
                 _ => {
@@ -216,17 +211,11 @@ impl fmt::Display for ParsingError {
             ParsingError::MissingIdentifier(x) => format!("Missing identifier {}", x),
             ParsingError::TypeError(x, y) => format!("Found {} type in array, expected {}", x, y),
             ParsingError::Expected(x, y) => format!("Expected {} found {}", x, y),
-        };
-        write!(f, "{}", clause)
-    }
-}
-
-impl fmt::Debug for ParsingError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        let clause = match self {
-            ParsingError::MissingIdentifier(x) => format!("Missing identifier {}", x),
-            ParsingError::TypeError(x, y) => format!("Found {} type in a {} array", x, y),
-            ParsingError::Expected(x, y) => format!("Expected {} found {}", x, y),
+            ParsingError::StringErr(x, y) => match x {
+                0 => format!("Invalid escaped char {}", y),
+                1 => format!("Unicode character is a non scalar value {}", y),
+                _ => Default::default(),
+            },
         };
         write!(f, "{}", clause)
     }

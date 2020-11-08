@@ -82,6 +82,18 @@ pub mod test {
     }
 
     #[test]
+    pub fn inline_int_table() {
+        let string = br#"{ val = 1 }"#;
+        let lexial = Lexer::lex(string.to_vec());
+        let mut peekable = lexial.into_iter().peekable();
+        let parsed_table = Types::handle_value(&mut peekable);
+        let mut map = HashMap::new();
+        map.insert("val".to_string(), TomlValue::Int(1));
+        let inline_table = TomlValue::InlineTable(map);
+        assert_eq!(parsed_table.unwrap(), inline_table);
+    }
+
+    #[test]
     #[should_panic]
     pub fn inline_table_no_closing_bracket() {
         let string = br#"{ val = "string""#;

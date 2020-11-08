@@ -253,7 +253,7 @@ mod tests {
     #[test]
     #[should_panic]
     pub fn no_value_after_comma() {
-        let string = b"[1, 2, 3,]";
+        let string = b"[1, 2, 3,,]";
         let lexial = Lexer::lex(string.to_vec());
         let mut peekable = lexial.into_iter().peekable();
         let toml_value = Types::handle_value(&mut peekable);
