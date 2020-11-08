@@ -1,13 +1,11 @@
-use rtoml::ast::Node::Value;
-use rtoml::ast::TomlValue::String;
-use rtoml::parser::RToml;
+use rtoml::prelude::*;
+use std::error::Error;
 
-fn main() -> std::io::Result<()> {
-    let toml = RToml::file("templates/test.toml");
+fn main() -> Result<(), Box<dyn Error>> {
+    let toml = RToml::file(concat!(env!("CARGO_MANIFEST_DIR"), "/templates/test.toml"));
     let reader = toml.parse()?;
-    let val = reader.get_table("some_table");
-    if let Value(String(x)) = val.get("value").unwrap() {
-        println!("{:?}", x);
-    }
+    let val = reader.get_table_array("table_arr");
+    println!("{:?}", val);
+
     Ok(())
 }

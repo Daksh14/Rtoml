@@ -1,4 +1,7 @@
+use crate::lexer::context::Context;
 use std::string::ToString;
+
+pub mod context;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Tokens {
@@ -18,26 +21,33 @@ pub enum Tokens {
     SingleQuote,
     LineBreak,
     TripleDoubleQuotes,
+    TripleSingleQuotes,
     Comma,
+}
+
+impl Tokens {
+    pub fn as_char(&self) -> char {
+        self.to_string().chars().next().unwrap()
+    }
 }
 
 impl ToString for Tokens {
     fn to_string(&self) -> String {
-        let x = match self {
+        String::from(match self {
             Tokens::Literal(x) => x.as_str(),
-            Tokens::Eq => ("="),
-            Tokens::Sbo => ("["),
-            Tokens::Sbc => ("]"),
-            Tokens::Cbo => ("{"),
-            Tokens::Cbc => ("}"),
-            Tokens::Hash => ("#"),
+            Tokens::Eq => "=",
+            Tokens::Sbo => "[",
+            Tokens::Sbc => "]",
+            Tokens::Cbo => "{",
+            Tokens::Cbc => "}",
+            Tokens::Hash => "#",
             Tokens::Comma => ",",
             Tokens::TripleDoubleQuotes => r#""""#,
-            Tokens::DoubleQuote => (r#"""#),
+            Tokens::DoubleQuote => r#""""#,
             Tokens::SingleQuote => "'",
-            Tokens::LineBreak => "\n",
-        };
-        String::from(x)
+            Tokens::LineBreak => "\\n",
+            Tokens::TripleSingleQuotes => "'''",
+        })
     }
 }
 
@@ -47,89 +57,171 @@ pub struct Lexer;
 macro_rules! push {
     ( $lexemes : expr, $context : expr, $new_token : expr ) => {
         if !$context.is_empty() {
-            $lexemes.push(crate::lexer::Tokens::Literal($context));
-            $context = String::new();
+            $lexemes.push($context.get_literal());
         }
+        $context.all_false();
         $lexemes.push($new_token);
     };
+    ( $lexemes : expr, $context : expr, $new_token : expr, $peekable : expr ) => {
+        if !$context.is_empty() {
+            $lexemes.push($context.get_literal());
+        }
+        $context.all_false();
+        $lexemes.push($new_token);
+        $peekable.next();
+    };
+}
+
+macro_rules! quote {
+    ( $lexemes : expr, $context : expr, $quote : expr ) => {
+        $context.literal_context ^= true;
+        if !$context.is_empty() {
+            $lexemes.push($context.get_literal());
+        }
+        $lexemes.push($quote);
+    };
+}
+
+#[macro_use]
+macro_rules! literal_check {
+    ( $context : expr, $char: expr, $peekable : expr, $body : expr) => {{
+        if !$context.is_literal_context() {
+            $body
+        } else {
+            $context.push($char);
+            $peekable.next();
+        }
+    }};
 }
 
 impl Lexer {
     pub fn lex(data: Vec<u8>) -> Vec<Tokens> {
         let mut lexemes: Vec<Tokens> = Vec::new();
         let mut peekable = data.into_iter().peekable();
-        let mut literal_context = String::new();
-        let mut lexing_literal = false;
-        while let Some(val) = peekable.next() {
+        let mut context = Context::new();
+        while peekable.peek().is_some() {
+            let val = peekable.peek().unwrap();
             match val {
                 // brackets
-                b'[' => {
-                    push!(lexemes, literal_context, Tokens::Sbo);
-                }
-                b']' => {
-                    push!(lexemes, literal_context, Tokens::Sbc);
-                }
-                b'{' => {
-                    push!(lexemes, literal_context, Tokens::Cbo);
-                }
-                b'}' => {
-                    push!(lexemes, literal_context, Tokens::Cbc);
-                }
+                b'[' => literal_check!(context, Tokens::Sbo.as_char(), peekable, {
+                    push!(lexemes, context, Tokens::Sbo, peekable);
+                }),
+                b']' => literal_check!(context, Tokens::Sbc.as_char(), peekable, {
+                    push!(lexemes, context, Tokens::Sbc, peekable);
+                }),
+                b'{' => literal_check!(context, Tokens::Cbo.as_char(), peekable, {
+                    push!(lexemes, context, Tokens::Cbo, peekable);
+                }),
+                b'}' => literal_check!(context, Tokens::Cbc.as_char(), peekable, {
+                    push!(lexemes, context, Tokens::Cbc, peekable);
+                }),
                 // symbols
-                b'=' => {
-                    push!(lexemes, literal_context, Tokens::Eq);
-                }
-                b'#' => {
-                    push!(lexemes, literal_context, Tokens::Hash);
-                }
+                b'=' => literal_check!(context, Tokens::Eq.as_char(), peekable, {
+                    push!(lexemes, context, Tokens::Eq, peekable);
+                }),
+                b'#' => literal_check!(context, Tokens::Hash.as_char(), peekable, {
+                    push!(lexemes, context, Tokens::Hash, peekable);
+                }),
+                b',' => literal_check!(context, Tokens::Comma.as_char(), peekable, {
+                    push!(lexemes, context, Tokens::Comma, peekable);
+                }),
                 b'"' => {
+                    peekable.next();
                     if let Some(b'"') = peekable.peek() {
                         peekable.next();
                         if let Some(b'"') = peekable.peek() {
-                            peekable.next();
-                            push!(lexemes, literal_context, Tokens::TripleDoubleQuotes);
+                            quote!(lexemes, context, Tokens::TripleDoubleQuotes);
                         } else {
-                            push!(lexemes, literal_context, Tokens::DoubleQuote);
+                            quote!(lexemes, context, Tokens::DoubleQuote);
                         }
+                        peekable.next();
                     } else {
-                        push!(lexemes, literal_context, Tokens::DoubleQuote);
-                    }
-                    if lexing_literal {
-                        lexing_literal = false
-                    } else {
-                        lexing_literal = true;
+                        quote!(lexemes, context, Tokens::DoubleQuote);
                     }
                 }
                 b'\'' => {
-                    push!(lexemes, literal_context, Tokens::SingleQuote);
-                }
-                b'\\' => {
-                    if lexing_literal {
-                        if let Some(x) = peekable.next() {
-                            literal_context.push(x as char)
+                    peekable.next();
+                    if let Some(b'\'') = peekable.peek() {
+                        peekable.next();
+                        if let Some(b'\'') = peekable.peek() {
+                            quote!(lexemes, context, Tokens::TripleSingleQuotes);
                         } else {
-                            literal_context.push(val as char);
+                            quote!(lexemes, context, Tokens::SingleQuote);
                         }
+                        peekable.next();
                     } else {
-                        literal_context.push(val as char);
+                        quote!(lexemes, context, Tokens::SingleQuote);
                     }
                 }
                 b'\n' => {
-                    push!(lexemes, literal_context, Tokens::LineBreak);
-                }
-                b',' => {
-                    push!(lexemes, literal_context, Tokens::Comma);
+                    push!(lexemes, context, Tokens::LineBreak, peekable);
                 }
                 b' ' => {
-                    if lexing_literal {
-                        literal_context.push(val as char)
+                    if context.is_literal_context() || context.is_int_context() {
+                        context.push(' ');
                     }
+                    peekable.next();
                 }
+                // anything else
                 _ => {
-                    literal_context.push(val as char);
+                    if (*val as char).is_numeric() {
+                        context.int_context = true;
+                    }
+                    context.push(peekable.next().unwrap() as char);
                 }
             };
         }
+        if !context.is_empty() {
+            lexemes.push(context.get_literal());
+        }
+        println!("{:#?}", lexemes);
         lexemes
+    }
+}
+
+#[cfg(test)]
+pub mod test {
+    use super::*;
+
+    #[test]
+    pub fn basic_lexing() {
+        let string = b"value = 1";
+        assert_eq!(
+            vec![
+                Tokens::Literal("value".to_string()),
+                Tokens::Eq,
+                Tokens::Literal("1".to_string())
+            ],
+            Lexer::lex(string.to_vec())
+        );
+    }
+
+    #[test]
+    pub fn preseve_spaces_in_quotes() {
+        let string = br#"value = "hello, world""#;
+        assert_eq!(
+            vec![
+                Tokens::Literal("value".to_string()),
+                Tokens::Eq,
+                Tokens::DoubleQuote,
+                Tokens::Literal("hello, world".to_string()),
+                Tokens::DoubleQuote,
+            ],
+            Lexer::lex(string.to_vec())
+        );
+    }
+
+    #[test]
+    pub fn preseve_spaces_for_ints() {
+        let string = br#"value = 1 234 5"#;
+        let lexed = Lexer::lex(string.to_vec());
+        assert_eq!(
+            vec![
+                Tokens::Literal("value".to_string()),
+                Tokens::Eq,
+                Tokens::Literal("1 234 5".to_string())
+            ],
+            lexed
+        );
     }
 }

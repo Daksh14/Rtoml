@@ -1,3 +1,2 @@
 [some_table]
-value = "this is me \"inside quotes\" something"
-
+array_of_inline_table = [1,2,3,2.2]
