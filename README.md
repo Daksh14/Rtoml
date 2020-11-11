@@ -45,3 +45,6 @@ fn main() -> Result<(), Box<dyn Error>> {
 - [ ] + or - number prefixes
 - [ ] Table dot `.` format in table names
 - [ ] Validity testing
+
+# License
+MIT
