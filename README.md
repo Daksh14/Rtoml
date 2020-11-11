@@ -25,7 +25,7 @@ For a toml file
 [table]
 value = "hello, world"
 ```
-We will use the following code to aquire values
+We will use the following code to acquire values
 ```rust
 use rtoml::prelude::*;
 use std::error::Error;
