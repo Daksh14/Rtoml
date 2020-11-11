@@ -2,8 +2,8 @@
 
 Rtoml is a toml parser that's designed to
 
-1. Aquire values at compile time to a struct.
-2. Aquire values at runtime required to work. 
+1. Acquire values at compile time to a struct.
+2. Acquire values at runtime required to work. 
 
 At the core, a Toml value is represented by this enum
 ```rust
