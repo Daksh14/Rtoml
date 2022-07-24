@@ -1,129 +1,254 @@
-use crate::builtins::{ParsingError, Types};
-use crate::comp_err;
-use crate::TomlValue;
+use crate::error::ErrLocation;
+use crate::parser::r_slice::RSlice;
+use crate::{DateTime, TomlError, TomlValue};
 
-pub struct TomlNum;
+use crate::parser::r_iter::RIter;
+use speedate;
 
-impl TomlNum {
-    pub fn handle(num_str: String) -> TomlValue {
-        let mut final_num = String::new();
-        let mut peekable = num_str.chars().peekable();
-        let mut dot_count: u8 = 0;
-        while peekable.peek().is_some() {
-            if let Some(chars) = peekable.next() {
-                match chars {
-                    '_' => {
-                        if let Some(num) = peekable.peek() {
-                            if !num.is_numeric() {
-                                comp_err!("Expected num after _");
-                            }
-                        } else {
-                            comp_err!("Expected num after _");
-                        }
-                    }
-                    '.' => {
-                        dot_count += 1;
-                        if dot_count > 1 {
-                            comp_err!("Unexpected dot `.` while parsing a floating point, put the value in quotes if its not a floating point")
-                        }
-                        final_num.push('.')
-                    }
-                    _ => {
-                        if chars.is_numeric() {
-                            final_num.push(chars)
-                        } else {
-                            comp_err!("Unexpected character when parsing int");
-                        }
-                    }
-                }
-            }
-        }
-        if let Ok(bit64_int) = final_num.parse::<i64>() {
-            TomlValue::Int(bit64_int)
-        } else if dot_count > 0 {
-            if let Ok(floating) = final_num.parse::<f64>() {
-                TomlValue::Floating(floating)
+#[derive(PartialEq)]
+pub enum Hint {
+    Inf,
+    Nan,
+    Number,
+    Negative,
+    Positive,
+}
+
+pub fn parse_num_or_date<'a>(
+    literal: &str,
+    hint: Hint,
+    slice: RSlice<'a>,
+) -> Result<TomlValue<'a>, TomlError<'a>> {
+    let literal = literal.replace('_', "");
+
+    let value = match hint {
+        Hint::Inf => TomlValue::Float(f64::INFINITY),
+        Hint::Nan => TomlValue::Float(f64::NAN),
+        Hint::Number => {
+            if let Ok(integer) = literal.parse() {
+                TomlValue::Int(integer)
+            } else if let Ok(float) = literal.parse() {
+                TomlValue::Float(float)
+            } else if let Ok(parsed_date_time) = speedate::DateTime::parse_str(&literal) {
+                TomlValue::DateTime(DateTime::DateTime(parsed_date_time))
+            } else if let Ok(parsed_date) = speedate::Date::parse_str(&literal) {
+                TomlValue::DateTime(DateTime::Date(parsed_date))
+            } else if let Ok(time) = speedate::Time::parse_str(&literal) {
+                TomlValue::DateTime(DateTime::Time(time))
             } else {
-                comp_err!("Error in parsing integer");
+                return Err(TomlError::CannotParseValue(ErrLocation::new(RIter::from(
+                    slice,
+                ))));
             }
-        } else {
-            comp_err!("Error in parsing integer");
         }
-    }
+        Hint::Positive => {
+            let check = check_if_nan_or_inf(&literal[1..]);
 
-    pub fn check_num(num_str: &str) -> Result<Types, ParsingError> {
-        let mut num_type: Option<Types> = None;
-        let mut peekable = num_str.chars().peekable();
-        while peekable.peek().is_some() {
-            let chars = peekable.peek().unwrap();
-            match chars {
-                '_' => {
-                    peekable.next();
-                }
-                '.' => {
-                    peekable.next();
-                    // check if there's a number after the `.` dot
-                    if peekable.peek().is_some() {
-                        let num = peekable.next().unwrap();
-                        if num.is_numeric() {
-                            num_type = Some(Types::Floating);
-                        } else {
-                            return Err(ParsingError::Expected(
-                                "num".to_string(),
-                                "NaN".to_string(),
-                            ));
-                        }
-                    } else {
-                        return Err(ParsingError::Expected(
-                            "num".to_string(),
-                            "None".to_string(),
-                        ));
-                    }
-                }
-                _ => {
-                    if chars.is_numeric() {
-                        if num_type.is_none() {
-                            num_type = Some(Types::Int);
-                        }
-                    } else {
-                        num_type = Some(Types::Void)
-                    }
-                    peekable.next();
-                }
+            if Some(Hint::Inf) == check {
+                TomlValue::Float(f64::INFINITY)
+            } else if Some(Hint::Nan) == check {
+                TomlValue::Float(f64::NAN)
+            } else if let Ok(integer) = literal.parse() {
+                TomlValue::Int(integer)
+            } else if let Ok(number) = literal.parse() {
+                TomlValue::Float(number)
+            } else {
+                return Err(TomlError::CannotParseValue(ErrLocation::new(RIter::from(
+                    slice,
+                ))));
             }
         }
-        if let Some(x) = num_type {
-            Ok(x)
-        } else {
-            comp_err!("Error in parsing num");
+        Hint::Negative => {
+            let check = check_if_nan_or_inf(&literal[1..]);
+
+            if Some(Hint::Inf) == check {
+                TomlValue::Float(f64::NEG_INFINITY)
+            } else if Some(Hint::Nan) == check {
+                TomlValue::Float(f64::NAN)
+            } else if let Ok(integer) = literal.parse() {
+                TomlValue::Int(integer)
+            } else if let Ok(number) = literal.parse() {
+                TomlValue::Float(number)
+            } else {
+                return Err(TomlError::CannotParseValue(ErrLocation::new(RIter::from(
+                    slice,
+                ))));
+            }
         }
+    };
+
+    Ok(value)
+}
+
+pub fn check_if_nan_or_inf(literal: &str) -> Option<Hint> {
+    match literal {
+        "inf" => Some(Hint::Inf),
+        "nan" => Some(Hint::Nan),
+        _ => None,
     }
 }
 
 #[cfg(test)]
-pub mod test {
-    use super::*;
+mod tests {
+    use crate::builtins::{parse_value, tests::get_tokens_from_literal};
+    use crate::DateTime;
+    use crate::TomlValue;
+    use speedate;
 
     #[test]
-    pub fn basic_ints() {
-        let num = TomlNum::handle("1".to_string());
-        assert_eq!(num, TomlValue::Int(1));
+    pub fn floats() {
+        // floats with underscore
+        assert_eq!(
+            parse_value(get_tokens_from_literal("1_2_3_4.1_2_3_")).unwrap(),
+            TomlValue::Float(1234.123)
+        );
+        // positive floats
+        assert_eq!(
+            parse_value(get_tokens_from_literal("+1.102")).unwrap(),
+            TomlValue::Float(1.102)
+        );
+        // positive floats without positive sign
+        assert_eq!(
+            parse_value(get_tokens_from_literal("1.102")).unwrap(),
+            TomlValue::Float(1.102)
+        );
+        // negative floats
+        assert_eq!(
+            parse_value(get_tokens_from_literal("-1.102")).unwrap(),
+            TomlValue::Float(-1.102)
+        );
+        // nan positive
+        assert!(parse_value(get_tokens_from_literal("+nan"))
+            .unwrap()
+            .as_floating()
+            .unwrap()
+            .is_nan());
+        // nan positive without positive sign
+        assert!(parse_value(get_tokens_from_literal("nan"))
+            .unwrap()
+            .as_floating()
+            .unwrap()
+            .is_nan());
+        // nan negative
+        assert!(parse_value(get_tokens_from_literal("-nan"))
+            .unwrap()
+            .as_floating()
+            .unwrap()
+            .is_nan());
+        // inf positive
+        assert_eq!(
+            parse_value(get_tokens_from_literal("+inf")).unwrap(),
+            TomlValue::Float(f64::INFINITY)
+        );
+        // inf positive without positive sign
+        assert_eq!(
+            parse_value(get_tokens_from_literal("inf")).unwrap(),
+            TomlValue::Float(f64::INFINITY)
+        );
+        // inf negative
+        assert_eq!(
+            parse_value(get_tokens_from_literal("-inf")).unwrap(),
+            TomlValue::Float(f64::NEG_INFINITY)
+        );
     }
 
     #[test]
-    pub fn basic_floating() {
-        let num = TomlNum::handle("1.1".to_string());
-        assert_eq!(num, TomlValue::Floating(1.1));
+    pub fn datetime() {
+        //  RFC 3339
+        let first_date = "1979-05-27T07:32:00Z";
+        let second_date = "1979-05-27T00:32:00-07:00";
+        let third_date = "1979-05-27T00:32:00.999999-07:00";
+        let forth_date = "1979-05-27 07:32:00Z";
+        let fifth_date = "1979-05-27T07:32:00";
+        let six_date = "1979-05-27T00:32:00.999999";
+        // Date
+        let seventh_date = "1979-05-27";
+        // Time
+        let first_time = "07:32:00";
+        let second_time = "00:32:00.999999";
+
+        assert_eq!(
+            parse_value(get_tokens_from_literal(first_date)).unwrap(),
+            TomlValue::DateTime(DateTime::DateTime(
+                speedate::DateTime::parse_str(first_date).unwrap()
+            ))
+        );
+        assert_eq!(
+            parse_value(get_tokens_from_literal(second_date)).unwrap(),
+            TomlValue::DateTime(DateTime::DateTime(
+                speedate::DateTime::parse_str(second_date).unwrap()
+            ))
+        );
+        assert_eq!(
+            parse_value(get_tokens_from_literal(third_date)).unwrap(),
+            TomlValue::DateTime(DateTime::DateTime(
+                speedate::DateTime::parse_str(third_date).unwrap()
+            ))
+        );
+        assert_eq!(
+            parse_value(get_tokens_from_literal(forth_date)).unwrap(),
+            TomlValue::DateTime(DateTime::DateTime(
+                speedate::DateTime::parse_str(forth_date).unwrap()
+            ))
+        );
+        assert_eq!(
+            parse_value(get_tokens_from_literal(fifth_date)).unwrap(),
+            TomlValue::DateTime(DateTime::DateTime(
+                speedate::DateTime::parse_str(fifth_date).unwrap()
+            ))
+        );
+        assert_eq!(
+            parse_value(get_tokens_from_literal(six_date)).unwrap(),
+            TomlValue::DateTime(DateTime::DateTime(
+                speedate::DateTime::parse_str(six_date).unwrap()
+            ))
+        );
+        assert_eq!(
+            parse_value(get_tokens_from_literal(seventh_date)).unwrap(),
+            TomlValue::DateTime(DateTime::Date(
+                speedate::Date::parse_str(seventh_date).unwrap()
+            ))
+        );
+        assert_eq!(
+            parse_value(get_tokens_from_literal(first_time)).unwrap(),
+            TomlValue::DateTime(DateTime::Time(
+                speedate::Time::parse_str(first_time).unwrap()
+            ))
+        );
+        assert_eq!(
+            parse_value(get_tokens_from_literal(second_time)).unwrap(),
+            TomlValue::DateTime(DateTime::Time(
+                speedate::Time::parse_str(second_time).unwrap()
+            ))
+        );
     }
 
     #[test]
-    pub fn undersoce_seperated() {
-        let num = TomlNum::handle("1_1_111_22".to_string());
-        assert_eq!(num, TomlValue::Int(1111122));
-    }
-    #[test]
-    pub fn undersoce_seperated_floating() {
-        let num = TomlNum::handle("1_1_11.1_22".to_string());
-        assert_eq!(num, TomlValue::Floating(1111.122));
+    pub fn integers() {
+        // numbers with underscore
+        assert_eq!(
+            parse_value(get_tokens_from_literal("1_2_3_4")).unwrap(),
+            TomlValue::Int(1234)
+        );
+        // numbers with underscore without positive sign
+        assert_eq!(
+            parse_value(get_tokens_from_literal("+1_2_3_4")).unwrap(),
+            TomlValue::Int(1234)
+        );
+        // positive numbers
+        assert_eq!(
+            parse_value(get_tokens_from_literal("+1")).unwrap(),
+            TomlValue::Int(1)
+        );
+        // positive numbers without positive sign
+        assert_eq!(
+            parse_value(get_tokens_from_literal("1")).unwrap(),
+            TomlValue::Int(1)
+        );
+        // negative numbers
+        assert_eq!(
+            parse_value(get_tokens_from_literal("-1")).unwrap(),
+            TomlValue::Int(-1)
+        );
     }
 }

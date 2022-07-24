@@ -1,158 +1,203 @@
-use crate::assert_toml;
-use crate::builtins::{ParsingError, TomlValue};
-use crate::lexer::Tokens;
-use std::iter::Peekable;
+use crate::error::ErrLocation;
+use crate::lexer::Token;
+use crate::parser::r_iter::RIter;
+use crate::parser::r_slice::RSlice;
+use crate::{TomlError, TomlValue};
 
-pub struct TomlString<'a, S: Iterator<Item = Tokens>> {
-    peekable: &'a mut Peekable<S>,
+pub fn parse_string<'a>(
+    slice: RSlice<'a>,
+    quote_type: Token,
+) -> Result<TomlValue<'a>, TomlError<'a>> {
+    let mut iter = RIter::from(slice);
+    let mut string = String::new();
+    let mut is_multiline = false;
+
+    if iter.next_if_eq(&quote_type) && iter.next_if_eq(&quote_type) {
+        is_multiline = true;
+        if let Some((Token::LineBreak, _)) = iter.peek() {
+            iter.next();
+        }
+    }
+
+    if quote_type == Token::SingleQuote {
+        parse_string_single_quotes(is_multiline, &mut string, &mut iter);
+        return Ok(TomlValue::String(string));
+    }
+
+    while let Some((token, _)) = iter.next() {
+        match token {
+            Token::DoubleQuote => {
+                if is_multiline {
+                    if iter.next_if_eq(token) && iter.next_if_eq(token) {
+                        break;
+                    } else {
+                        string.push((*token).into());
+                        if let Some((Token::Literal(x), _)) = iter.peek() {
+                            string.push_str(x);
+                            iter.next();
+                        } else {
+                            break;
+                        }
+                    }
+                } else {
+                    break;
+                }
+            }
+            Token::BackSlash => {
+                if let Some((token, _)) = iter.next() {
+                    match token {
+                        Token::Literal(literal) => {
+                            let first_char = literal.as_bytes().get(0);
+                            if first_char == Some(&b'u') {
+                                if let Some(eight_dig) = &literal.get(1..9) {
+                                    string.push(get_char_from_scalar(eight_dig, iter.as_slice())?);
+                                    string.push_str(&literal[9..]);
+                                } else if let Some(four_dig) = &literal.get(1..5) {
+                                    string.push(get_char_from_scalar(four_dig, iter.as_slice())?);
+                                    string.push_str(&literal[5..]);
+                                } else {
+                                    return Err(TomlError::UnknownEscapeSequence(
+                                        ErrLocation::new(iter),
+                                    ));
+                                }
+                            } else if token.is_space() {
+                                string.push_str(trim_till_non_whitespace(&mut iter))
+                            } else {
+                                string.push(escape(first_char, iter.as_slice())?);
+                                string.push_str(&literal[1..]);
+                            }
+                        }
+                        Token::DoubleQuote | Token::BackSlash => string.push((*token).into()),
+                        Token::LineBreak => string.push_str(trim_till_non_whitespace(&mut iter)),
+                        _ => return Err(TomlError::UnknownEscapeSequence(ErrLocation::new(iter))),
+                    }
+                }
+            }
+            Token::LineBreak => {
+                if !is_multiline {
+                    return Err(TomlError::UnexpectedCharacter(
+                        ErrLocation::new(iter),
+                        &[Token::Literal(r#"'''"#)],
+                    ));
+                } else {
+                    string.push((*token).into());
+                }
+            }
+            Token::Literal(str) => {
+                string.push_str(str);
+            }
+            _ => (),
+        }
+    }
+
+    Ok(TomlValue::String(string))
 }
 
-impl<'a, S: Iterator<Item = Tokens>> TomlString<'a, S> {
-    pub fn handle(peekable: &mut Peekable<S>, quote_count: u8) -> Result<TomlValue, ParsingError> {
-        let mut string = TomlString { peekable };
-        string.check_quotes()?;
-
-        match quote_count {
-            1 => {
-                let value = string.parse()?;
-                assert_toml!(peekable.next(), Tokens::DoubleQuote);
-                Ok(TomlValue::String(value))
-            }
-            3 => {
-                let value = string.parse_triple_quote()?;
-                assert_toml!(peekable.next(), Tokens::TripleDoubleQuotes);
-                Ok(TomlValue::String(value))
-            }
-            _ => Err(ParsingError::Expected(
-                "3 or 1 quotes".to_string(),
-                quote_count.to_string(),
-            )),
-        }
-    }
-    pub fn parse(&mut self) -> Result<String, ParsingError> {
-        let mut value = String::new();
-        while Some(&Tokens::DoubleQuote) != self.peekable.peek() {
-            if let Some(x) = self.peekable.next() {
-                if x.to_string() == "\\" {
-                    self.escape(&mut value)?;
-                } else {
-                    value.push_str(&x.to_string());
-                }
-
-                if x == Tokens::LineBreak {
-                    return Err(ParsingError::Expected(
-                        Tokens::DoubleQuote.to_string(),
-                        Tokens::LineBreak.to_string(),
-                    ));
-                }
-            } else {
-                return Err(ParsingError::Expected(
-                    Tokens::DoubleQuote.to_string(),
-                    "None".to_string(),
-                ));
-            }
-        }
-        Ok(value)
-    }
-    pub fn escape(&mut self, value: &mut String) -> Result<(), ParsingError> {
-        if let Some(x) = self.peekable.next() {
-            let val = x.to_string();
-            match val.as_str() {
-                // backspace
-                "b" => value.push(0x08 as char),
-                // tab
-                "t" => value.push(0x09 as char),
-                // linefeed
-                "n" => value.push(0x0A as char),
-                // form feed
-                "f" => value.push(0x0C as char),
-                // quote
-                r#"""# => value.push(0x22 as char),
-                // carriage return
-                "r" => value.push(0x0D as char),
-                // backslash
-                "\\" => value.push(0x5C as char),
-                // unicode
-                "u" => {
-                    let mut integer = String::with_capacity(4);
-                    for _ in 0..3 {
-                        if let Some(x) = self.peekable.peek() {
-                            if let Ok(y) = x.to_string().parse::<u8>() {
-                                integer.push_str(&y.to_string());
-                                self.peekable.next();
+fn parse_string_single_quotes(is_multiline: bool, string: &mut String, iter: &mut RIter) {
+    if is_multiline {
+        while let Some((token, _)) = iter.next() {
+            match token {
+                Token::SingleQuote => {
+                    if iter.next_if_eq(token) && iter.next_if_eq(token) {
+                        break;
+                    } else {
+                        string.push((*token).into());
+                        while let Some((token, _)) = iter.next() {
+                            match token {
+                                Token::SingleQuote => {
+                                    string.push((*token).into());
+                                    break;
+                                }
+                                Token::Literal(x) => {
+                                    string.push_str(x);
+                                }
+                                _ => {
+                                    string.push((*token).into());
+                                }
                             }
                         }
                     }
-                    if let Some(x) = self.peekable.peek() {
-                        if let Ok(y) = x.to_string().parse::<u8>() {
-                            integer.push_str(&y.to_string());
-                            self.peekable.next();
-                        }
-                    }
-                    for _ in 0..2 {
-                        if let Some(x) = self.peekable.peek() {
-                            if let Ok(y) = x.to_string().parse::<u8>() {
-                                integer.push_str(&y.to_string());
-                                self.peekable.next();
-                            }
-                        }
-                    }
-                    println!("{:?}", integer);
-                    if let Ok(x) = integer.parse::<u32>() {
-                        if let Some(y) = std::char::from_u32(x) {
-                            println!("{:?}", y);
-                            value.push(y);
-                        } else {
-                            return Err(ParsingError::StringErr(1, integer));
-                        }
-                    }
                 }
-                _ => return Err(ParsingError::StringErr(0, val.to_string())),
+                Token::Literal(x) => {
+                    string.push_str(x);
+                }
+                _ => {
+                    string.push((*token).into());
+                }
             }
         }
-        Ok(())
-    }
-    pub fn parse_triple_quote(&mut self) -> Result<String, ParsingError> {
-        let mut value = String::new();
-        while Some(&Tokens::TripleDoubleQuotes) != self.peekable.peek() {
-            if let Some(x) = self.peekable.next() {
-                if x.to_string() == "\\" {
-                    self.escape(&mut value)?;
-                } else {
-                    value.push_str(&x.to_string());
+    } else {
+        while let Some((token, _)) = iter.next() {
+            match token {
+                Token::SingleQuote => break,
+                Token::Literal(x) => {
+                    string.push_str(x);
                 }
-            } else {
-                return Err(ParsingError::Expected(
-                    Tokens::DoubleQuote.to_string(),
-                    "None".to_string(),
-                ));
+                _ => {
+                    string.push((*token).into());
+                }
             }
         }
-        Ok(value)
     }
-    pub fn check_quotes(&mut self) -> Result<(), ParsingError> {
-        if let Some(Tokens::DoubleQuote) | Some(Tokens::TripleDoubleQuotes) = self.peekable.peek() {
-            Err(ParsingError::Expected(
-                "3 or 1 quotes".to_string(),
-                "Invalid number of quotes".to_string(),
-            ))
-        } else {
-            Ok(())
+}
+
+fn escape<'a>(char: Option<&u8>, slice: RSlice<'a>) -> Result<char, TomlError<'a>> {
+    let res = match char {
+        Some(b'b') => '\x08',
+        Some(b't') => '\x09',
+        Some(b'n') => '\x0A',
+        Some(b'f') => '\x0C',
+        Some(b'r') => '\x0D',
+        Some(_) => {
+            return Err(TomlError::UnknownEscapeSequence(ErrLocation::new(
+                RIter::from(slice),
+            )))
+        }
+        None => {
+            return Err(TomlError::CannotParseValue(ErrLocation::new(RIter::from(
+                slice,
+            ))))
+        }
+    };
+
+    Ok(res)
+}
+
+fn get_char_from_scalar<'a>(scalar: &str, slice: RSlice<'a>) -> Result<char, TomlError<'a>> {
+    u32::from_str_radix(scalar, 16)
+        .map_err(|_| TomlError::UnknownEscapeSequence(ErrLocation::new(RIter::from(slice))))
+        .map(|byte| {
+            char::from_u32(byte).map_or_else(
+                || {
+                    Err(TomlError::UnknownEscapeSequence(ErrLocation::new(
+                        RIter::from(slice),
+                    )))
+                },
+                Ok,
+            )
+        })?
+}
+
+fn trim_till_non_whitespace<'a>(slice: &'a mut RIter) -> &'a str {
+    while let Some((peek, _)) = slice.next() {
+        if *peek == Token::LineBreak || peek.is_space() {
+            continue;
+        } else if let Token::Literal(lit) = peek {
+            return lit.trim_start();
         }
     }
+    ""
 }
 
 #[cfg(test)]
-pub mod test {
+mod tests {
     use super::*;
-    use crate::lexer::Lexer;
+    use crate::lexer::lex;
 
     #[test]
-    pub fn basic_string_single_quote() {
-        let string = br#""hello, world""#;
-        let lexial = Lexer::lex(string.to_vec());
-        let mut peekable = lexial.into_iter().peekable();
-        let string = TomlString::handle(&mut peekable, 1).unwrap();
-        assert_eq!(string, TomlValue::String(String::from("hello, world")));
+    fn basic_string() {
+        let lexed = &lex(br#"""hello""""#).unwrap();
+        let parsed = parse_string(RIter::new(lexed).as_slice(), Token::DoubleQuote);
+        assert_eq!(TomlValue::String(String::from(r#"tes"t"#)), parsed.unwrap());
     }
 }

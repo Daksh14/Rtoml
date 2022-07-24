@@ -8,3 +8,9 @@ license = "MIT"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+simdutf8 = { version = "0.1.4", features = [ "aarch64_neon" ] }
+speedate = "0.6.0"
+rustc-hash = "1.1.0"
+
+[dev-dependencies]
+serde_json = "1.0"
