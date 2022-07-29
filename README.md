@@ -7,22 +7,22 @@ Rtoml is a toml parser that's designed to
 
 At the core, a Toml value is represented by this enum
 ```rust
-pub enum TomlValue {
+pub enum TomlValue<'a> {
     Int(i64),
-    Floating(f64),
+    Float(f64),
     String(String),
-    Array(Vec<TomlValue>),
+    Array(Vec<TomlValue<'a>>),
     Boolean(bool),
-    InlineTable(HashMap<String, TomlValue>),
+    DateTime(DateTime),
+    Table(Table<'a>),
 }
 ```
-An Inline table is a hashmap and an array is a vector of `TomlValue`. 
 
 # Usage 
 
 For a toml file
 ```toml
-[table]
+[a_table]
 value = "hello, world"
 ```
 We will use the following code to acquire values
@@ -30,19 +30,28 @@ We will use the following code to acquire values
 use rtoml::prelude::*;
 use std::error::Error;
 
-fn main() -> Result<(), Box<dyn Error>> {
-    let toml = RToml::file(concat!(env!("CARGO_MANIFEST_DIR"), "/templates/test.toml"));
-    let reader = toml.parse()?;
-    let val = reader.get_table("table");
-    assert!("hello, world".to_string() == val.get("value").unwrap().get_string().unwrap());
+fn main() -> Result<(), TomlError> {
+    let mut data = String::new();
+    let mut file = File::open(concat!(env!("CARGO_MANIFEST_DIR"), "/templates/test.toml"))?;
+
+    file.read_to_string(&mut data)?;
+
+    let toml = TomlValue::try_from(data.as_str())?;
+
+    if let Some(table) = toml.as_table() {
+        if let Some(key_value) = table.get(&TomlKey::from("a_table")) {
+            assert_eq!(key.get(
+                TomlKey::from("value"),
+                TomlValue::Literal(String::from("hello, world"))
+            ))
+        }
+    }
 
     Ok(())
 }
 ```
 
 # TODO
-- [ ] Errors on specific line numbers
-- [ ] + or - number prefixes
 - [ ] Table dot `.` format in table names
 - [ ] Validity testing
 - [ ] Serialise derive traits

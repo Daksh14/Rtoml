@@ -4,9 +4,11 @@ use crate::error::TomlError;
 use crate::lexer::lex;
 use crate::parser::r_iter::RIter;
 use crate::parser::ParsedValue;
+use std::convert::TryFrom;
 
 use std::fmt::Write;
 use std::fmt::{format, write, Display, Formatter};
+use std::str::FromStr;
 
 use rustc_hash::FxHashMap;
 
@@ -83,12 +85,6 @@ impl<'a> TomlValue<'a> {
     pub fn as_table(&self) -> Option<&Table> {
         extract!(self, Table)
     }
-
-    pub fn parse(str: &'a str) -> Result<TomlValue<'a>, TomlError<'a>> {
-        let lexed = lex(str.as_bytes())?.leak();
-        println!("LEXED\n{:?}\n\n", lexed);
-        ParsedValue::new(TomlValue::Int(0), RIter::new(lexed)).parse()
-    }
 }
 
 impl<'a> TomlKey<'a> {
@@ -162,6 +158,15 @@ impl Display for TomlValue<'_> {
     }
 }
 
+impl<'a> TryFrom<&'a str> for TomlValue<'a> {
+    type Error = TomlError<'a>;
+
+    fn try_from(str: &'a str) -> Result<Self, Self::Error> {
+        let lexed = lex(str.as_bytes())?.leak();
+        ParsedValue::new(TomlValue::Int(0), RIter::new(lexed)).parse()
+    }
+}
+
 impl Display for DateTime {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let x = match self {
@@ -182,5 +187,11 @@ impl Display for TomlKey<'_> {
         };
 
         write!(f, "{}", val)
+    }
+}
+
+impl<'a> From<&'a str> for TomlKey<'a> {
+    fn from(str: &'a str) -> Self {
+        Self::Literal(str)
     }
 }
