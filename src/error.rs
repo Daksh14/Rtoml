@@ -64,7 +64,11 @@ impl Display for TomlError<'_> {
                 for items in expected.iter() {
                     string.push_str(&items.to_string())
                 }
-                write!(f, "Unexpected character {}, expected {}", loc.token, string)
+                write!(
+                    f,
+                    "Unexpected character {}, expected {} at {}",
+                    loc.token, string, loc.index
+                )
             }
         }
     }

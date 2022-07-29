@@ -2,17 +2,18 @@ use crate::error::ErrLocation;
 use crate::lexer::Token;
 use crate::parser::r_iter::RIter;
 use crate::parser::r_slice::RSlice;
+use crate::parser::ParsedValue;
 use crate::{TomlError, TomlValue};
 
 pub fn parse_string<'a>(
     slice: RSlice<'a>,
     quote_type: Token,
-) -> Result<TomlValue<'a>, TomlError<'a>> {
+) -> Result<ParsedValue<'a>, TomlError<'a>> {
     let mut iter = RIter::from(slice);
     let mut string = String::new();
     let mut is_multiline = false;
 
-    if iter.next_if_eq(&quote_type) && iter.next_if_eq(&quote_type) {
+    if iter.next_if_eq(quote_type) && iter.next_if_eq(quote_type) {
         is_multiline = true;
         if let Some((Token::LineBreak, _)) = iter.peek() {
             iter.next();
@@ -21,14 +22,14 @@ pub fn parse_string<'a>(
 
     if quote_type == Token::SingleQuote {
         parse_string_single_quotes(is_multiline, &mut string, &mut iter);
-        return Ok(TomlValue::String(string));
+        return Ok(ParsedValue::new(TomlValue::String(string), iter));
     }
 
     while let Some((token, _)) = iter.next() {
         match token {
             Token::DoubleQuote => {
                 if is_multiline {
-                    if iter.next_if_eq(token) && iter.next_if_eq(token) {
+                    if iter.next_if_eq(*token) && iter.next_if_eq(*token) {
                         break;
                     } else {
                         string.push((*token).into());
@@ -90,7 +91,7 @@ pub fn parse_string<'a>(
         }
     }
 
-    Ok(TomlValue::String(string))
+    Ok(ParsedValue::new(TomlValue::String(string), iter))
 }
 
 fn parse_string_single_quotes(is_multiline: bool, string: &mut String, iter: &mut RIter) {
@@ -98,11 +99,11 @@ fn parse_string_single_quotes(is_multiline: bool, string: &mut String, iter: &mu
         while let Some((token, _)) = iter.next() {
             match token {
                 Token::SingleQuote => {
-                    if iter.next_if_eq(token) && iter.next_if_eq(token) {
+                    if iter.next_if_eq(*token) && iter.next_if_eq(*token) {
                         break;
                     } else {
                         string.push((*token).into());
-                        while let Some((token, _)) = iter.next() {
+                        for (token, _) in iter.by_ref() {
                             match token {
                                 Token::SingleQuote => {
                                     string.push((*token).into());
@@ -127,7 +128,7 @@ fn parse_string_single_quotes(is_multiline: bool, string: &mut String, iter: &mu
             }
         }
     } else {
-        while let Some((token, _)) = iter.next() {
+        for (token, _) in iter.by_ref() {
             match token {
                 Token::SingleQuote => break,
                 Token::Literal(x) => {
@@ -165,7 +166,7 @@ fn escape<'a>(char: Option<&u8>, slice: RSlice<'a>) -> Result<char, TomlError<'a
 
 fn get_char_from_scalar<'a>(scalar: &str, slice: RSlice<'a>) -> Result<char, TomlError<'a>> {
     u32::from_str_radix(scalar, 16)
-        .map_err(|_| TomlError::UnknownEscapeSequence(ErrLocation::new(RIter::from(slice))))
+        .map_err(|_| TomlError::UnknownEscapeSequence(ErrLocation::new(RIter::from(slice.clone()))))
         .map(|byte| {
             char::from_u32(byte).map_or_else(
                 || {
@@ -179,7 +180,7 @@ fn get_char_from_scalar<'a>(scalar: &str, slice: RSlice<'a>) -> Result<char, Tom
 }
 
 fn trim_till_non_whitespace<'a>(slice: &'a mut RIter) -> &'a str {
-    while let Some((peek, _)) = slice.next() {
+    for (peek, _) in slice.by_ref() {
         if *peek == Token::LineBreak || peek.is_space() {
             continue;
         } else if let Token::Literal(lit) = peek {
@@ -198,6 +199,9 @@ mod tests {
     fn basic_string() {
         let lexed = &lex(br#"""hello""""#).unwrap();
         let parsed = parse_string(RIter::new(lexed).as_slice(), Token::DoubleQuote);
-        assert_eq!(TomlValue::String(String::from(r#"tes"t"#)), parsed.unwrap());
+        assert_eq!(
+            TomlValue::String(String::from(r#"tes"t"#)),
+            parsed.unwrap().value
+        );
     }
 }

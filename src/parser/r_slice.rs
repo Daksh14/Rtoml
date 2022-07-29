@@ -3,7 +3,7 @@ use crate::parser::r_iter::RIter;
 
 use std::fmt::{Display, Formatter};
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Default, Debug)]
 pub struct RIndex {
     pub line: usize,
     pub col: usize,
@@ -15,10 +15,11 @@ impl RIndex {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct RSlice<'a> {
     pub slice: &'a [TokenSized<'a>],
     pub index: RIndex,
+    pub peeked: Option<&'a TokenSized<'a>>,
 }
 
 impl<'a> From<&RIter<'a>> for RSlice<'a> {
@@ -26,6 +27,7 @@ impl<'a> From<&RIter<'a>> for RSlice<'a> {
         Self {
             slice: iter.iter.as_slice(),
             index: iter.index,
+            peeked: iter.peeked,
         }
     }
 }

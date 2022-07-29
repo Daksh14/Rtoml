@@ -1,15 +1,14 @@
 use crate::lexer::{Token, TokenSized};
+use crate::parser::r_slice::{RIndex, RSlice};
 
 use std::iter::Iterator;
 use std::slice::Iter;
-
-use crate::parser::r_slice::{RIndex, RSlice};
 
 #[derive(Clone, Debug)]
 pub struct RIter<'a> {
     pub iter: Iter<'a, TokenSized<'a>>,
     pub index: RIndex,
-    peeked: Option<&'a TokenSized<'a>>,
+    pub(crate) peeked: Option<&'a TokenSized<'a>>,
 }
 
 impl<'a> RIter<'a> {
@@ -20,6 +19,14 @@ impl<'a> RIter<'a> {
             peeked: None,
         }
     }
+    pub fn from(slice: RSlice<'a>) -> Self {
+        Self {
+            iter: slice.slice.iter(),
+            index: slice.index,
+            peeked: slice.peeked,
+        }
+    }
+
     pub fn as_slice(&self) -> RSlice<'a> {
         RSlice::from(self)
     }
@@ -33,9 +40,9 @@ impl<'a> RIter<'a> {
         }
     }
 
-    pub fn next_if_eq(&mut self, token: &Token) -> bool {
+    pub fn next_if_eq(&mut self, token: Token) -> bool {
         if let Some((x, _)) = self.peek() {
-            if x == token {
+            if *x == token {
                 self.next();
                 true
             } else {
@@ -43,16 +50,6 @@ impl<'a> RIter<'a> {
             }
         } else {
             false
-        }
-    }
-}
-
-impl<'a> From<RSlice<'a>> for RIter<'a> {
-    fn from(slice: RSlice<'a>) -> Self {
-        Self {
-            iter: slice.slice.iter(),
-            index: RIndex::new(),
-            peeked: None,
         }
     }
 }

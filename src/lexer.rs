@@ -23,7 +23,7 @@ pub enum Token<'a> {
     Comma,
 }
 
-use crate::TomlError;
+use crate::{TomlError, TomlKey};
 use Token::*;
 
 impl<'a> Token<'a> {
@@ -52,6 +52,14 @@ impl<'a> Token<'a> {
 
     pub fn is_literal(&self) -> bool {
         matches!(self, Literal(_))
+    }
+
+    pub fn as_key(&self) -> TomlKey {
+        if let Literal(x) = self {
+            TomlKey::Literal(x.trim())
+        } else {
+            TomlKey::None
+        }
     }
 
     pub fn is_sbo(&self) -> bool {
@@ -91,12 +99,8 @@ pub fn lex(data: &[u8]) -> Result<Vec<TokenSized>, TomlError> {
         let entry = match get_special_byte(*byte) {
             Some(x) => {
                 if let CarriageReturn = x {
-                    if let Some(y) = peekable.peek().map(|x| get_special_byte(**x)).flatten() {
-                        if let LineBreak = y {
-                            (y, 1)
-                        } else {
-                            (x, 1)
-                        }
+                    if let Some(LineBreak) = peekable.peek().and_then(|x| get_special_byte(**x)) {
+                        (LineBreak, 1)
                     } else {
                         (x, 1)
                     }
@@ -107,7 +111,7 @@ pub fn lex(data: &[u8]) -> Result<Vec<TokenSized>, TomlError> {
             _ => {
                 let mut alphabetic_index = 0;
                 while let Some(x) = peekable.peek() {
-                    if !get_special_byte(**x).is_some() {
+                    if get_special_byte(**x).is_none() {
                         peekable.next();
                         alphabetic_index += 1;
                     } else {
@@ -157,7 +161,7 @@ impl Display for Token<'_> {
             Literal(x) => write!(f, "Literal({})", x),
             _ => {
                 let character: char = (*self).into();
-                write!(f, "{}", character)
+                write!(f, "{:?}", character)
             }
         }
     }

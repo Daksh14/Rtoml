@@ -5,36 +5,38 @@ use crate::parser::r_slice::RSlice;
 use crate::{TomlError, TomlValue};
 
 use crate::error::ErrLocation;
+use crate::parser::ParsedValue;
 use rustc_hash::FxHashMap;
 
-pub fn parse_inline_table(slice: RSlice) -> Result<TomlValue, TomlError> {
+pub fn parse_inline_table(slice: RSlice) -> Result<ParsedValue, TomlError> {
     let mut iter = RIter::from(slice);
     let mut map = FxHashMap::default();
 
     while let Some((token, _)) = iter.next() {
         match token {
-            Token::Literal(str) => {
-                if Token::Literal(str).is_valid_table_name_or_key() {
-                    if let Some((eq, _)) = iter.next() {
-                        if *eq == Token::Eq {
-                            map.insert(str.trim(), parse_value(iter.as_slice())?);
-                        }
-                    }
+            Token::Literal(_) => {
+                if token.is_valid_table_name_or_key() && iter.next_if_eq(Token::Eq) {
+                    let parsed = parse_value(iter.as_slice())?;
+                    map.insert(token.as_key(), parsed.value);
+                    iter = parsed.section;
                 }
             }
             Token::Cbc => {
                 break;
             }
+            Token::Comma => {
+                continue;
+            }
             _ => {
                 return Err(TomlError::UnexpectedCharacter(
                     ErrLocation::new(iter),
-                    &[Token::Cbc, Token::Literal("KEY")],
-                ))
+                    &[Token::Cbc, Token::Literal("")],
+                ));
             }
         }
     }
 
-    Ok(TomlValue::Table(map))
+    Ok(ParsedValue::new(TomlValue::Table(map), iter))
 }
 
 #[cfg(test)]

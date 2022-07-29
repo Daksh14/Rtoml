@@ -3,6 +3,7 @@ use crate::parser::r_slice::RSlice;
 use crate::{DateTime, TomlError, TomlValue};
 
 use crate::parser::r_iter::RIter;
+use crate::parser::ParsedValue;
 use speedate;
 
 #[derive(PartialEq)]
@@ -18,7 +19,7 @@ pub fn parse_num_or_date<'a>(
     literal: &str,
     hint: Hint,
     slice: RSlice<'a>,
-) -> Result<TomlValue<'a>, TomlError<'a>> {
+) -> Result<ParsedValue<'a>, TomlError<'a>> {
     let literal = literal.replace('_', "");
 
     let value = match hint {
@@ -77,7 +78,7 @@ pub fn parse_num_or_date<'a>(
         }
     };
 
-    Ok(value)
+    Ok(ParsedValue::new(value, RIter::from(slice)))
 }
 
 pub fn check_if_nan_or_inf(literal: &str) -> Option<Hint> {
@@ -99,55 +100,64 @@ mod tests {
     pub fn floats() {
         // floats with underscore
         assert_eq!(
-            parse_value(get_tokens_from_literal("1_2_3_4.1_2_3_")).unwrap(),
+            parse_value(get_tokens_from_literal("1_2_3_4.1_2_3_"))
+                .unwrap()
+                .value,
             TomlValue::Float(1234.123)
         );
         // positive floats
         assert_eq!(
-            parse_value(get_tokens_from_literal("+1.102")).unwrap(),
+            parse_value(get_tokens_from_literal("+1.102"))
+                .unwrap()
+                .value,
             TomlValue::Float(1.102)
         );
         // positive floats without positive sign
         assert_eq!(
-            parse_value(get_tokens_from_literal("1.102")).unwrap(),
+            parse_value(get_tokens_from_literal("1.102")).unwrap().value,
             TomlValue::Float(1.102)
         );
         // negative floats
         assert_eq!(
-            parse_value(get_tokens_from_literal("-1.102")).unwrap(),
+            parse_value(get_tokens_from_literal("-1.102"))
+                .unwrap()
+                .value,
             TomlValue::Float(-1.102)
         );
         // nan positive
         assert!(parse_value(get_tokens_from_literal("+nan"))
             .unwrap()
+            .value
             .as_floating()
             .unwrap()
             .is_nan());
         // nan positive without positive sign
         assert!(parse_value(get_tokens_from_literal("nan"))
             .unwrap()
+            .value
             .as_floating()
             .unwrap()
             .is_nan());
         // nan negative
         assert!(parse_value(get_tokens_from_literal("-nan"))
             .unwrap()
+            .value
             .as_floating()
             .unwrap()
             .is_nan());
         // inf positive
         assert_eq!(
-            parse_value(get_tokens_from_literal("+inf")).unwrap(),
+            parse_value(get_tokens_from_literal("+inf")).unwrap().value,
             TomlValue::Float(f64::INFINITY)
         );
         // inf positive without positive sign
         assert_eq!(
-            parse_value(get_tokens_from_literal("inf")).unwrap(),
+            parse_value(get_tokens_from_literal("inf")).unwrap().value,
             TomlValue::Float(f64::INFINITY)
         );
         // inf negative
         assert_eq!(
-            parse_value(get_tokens_from_literal("-inf")).unwrap(),
+            parse_value(get_tokens_from_literal("-inf")).unwrap().value,
             TomlValue::Float(f64::NEG_INFINITY)
         );
     }
@@ -168,55 +178,73 @@ mod tests {
         let second_time = "00:32:00.999999";
 
         assert_eq!(
-            parse_value(get_tokens_from_literal(first_date)).unwrap(),
+            parse_value(get_tokens_from_literal(first_date))
+                .unwrap()
+                .value,
             TomlValue::DateTime(DateTime::DateTime(
                 speedate::DateTime::parse_str(first_date).unwrap()
             ))
         );
         assert_eq!(
-            parse_value(get_tokens_from_literal(second_date)).unwrap(),
+            parse_value(get_tokens_from_literal(second_date))
+                .unwrap()
+                .value,
             TomlValue::DateTime(DateTime::DateTime(
                 speedate::DateTime::parse_str(second_date).unwrap()
             ))
         );
         assert_eq!(
-            parse_value(get_tokens_from_literal(third_date)).unwrap(),
+            parse_value(get_tokens_from_literal(third_date))
+                .unwrap()
+                .value,
             TomlValue::DateTime(DateTime::DateTime(
                 speedate::DateTime::parse_str(third_date).unwrap()
             ))
         );
         assert_eq!(
-            parse_value(get_tokens_from_literal(forth_date)).unwrap(),
+            parse_value(get_tokens_from_literal(forth_date))
+                .unwrap()
+                .value,
             TomlValue::DateTime(DateTime::DateTime(
                 speedate::DateTime::parse_str(forth_date).unwrap()
             ))
         );
         assert_eq!(
-            parse_value(get_tokens_from_literal(fifth_date)).unwrap(),
+            parse_value(get_tokens_from_literal(fifth_date))
+                .unwrap()
+                .value,
             TomlValue::DateTime(DateTime::DateTime(
                 speedate::DateTime::parse_str(fifth_date).unwrap()
             ))
         );
         assert_eq!(
-            parse_value(get_tokens_from_literal(six_date)).unwrap(),
+            parse_value(get_tokens_from_literal(six_date))
+                .unwrap()
+                .value,
             TomlValue::DateTime(DateTime::DateTime(
                 speedate::DateTime::parse_str(six_date).unwrap()
             ))
         );
         assert_eq!(
-            parse_value(get_tokens_from_literal(seventh_date)).unwrap(),
+            parse_value(get_tokens_from_literal(seventh_date))
+                .unwrap()
+                .value,
             TomlValue::DateTime(DateTime::Date(
                 speedate::Date::parse_str(seventh_date).unwrap()
             ))
         );
         assert_eq!(
-            parse_value(get_tokens_from_literal(first_time)).unwrap(),
+            parse_value(get_tokens_from_literal(first_time))
+                .unwrap()
+                .value,
             TomlValue::DateTime(DateTime::Time(
                 speedate::Time::parse_str(first_time).unwrap()
             ))
         );
         assert_eq!(
-            parse_value(get_tokens_from_literal(second_time)).unwrap(),
+            parse_value(get_tokens_from_literal(second_time))
+                .unwrap()
+                .value,
             TomlValue::DateTime(DateTime::Time(
                 speedate::Time::parse_str(second_time).unwrap()
             ))
@@ -227,27 +255,31 @@ mod tests {
     pub fn integers() {
         // numbers with underscore
         assert_eq!(
-            parse_value(get_tokens_from_literal("1_2_3_4")).unwrap(),
+            parse_value(get_tokens_from_literal("1_2_3_4"))
+                .unwrap()
+                .value,
             TomlValue::Int(1234)
         );
         // numbers with underscore without positive sign
         assert_eq!(
-            parse_value(get_tokens_from_literal("+1_2_3_4")).unwrap(),
+            parse_value(get_tokens_from_literal("+1_2_3_4"))
+                .unwrap()
+                .value,
             TomlValue::Int(1234)
         );
         // positive numbers
         assert_eq!(
-            parse_value(get_tokens_from_literal("+1")).unwrap(),
+            parse_value(get_tokens_from_literal("+1")).unwrap().value,
             TomlValue::Int(1)
         );
         // positive numbers without positive sign
         assert_eq!(
-            parse_value(get_tokens_from_literal("1")).unwrap(),
+            parse_value(get_tokens_from_literal("1")).unwrap().value,
             TomlValue::Int(1)
         );
         // negative numbers
         assert_eq!(
-            parse_value(get_tokens_from_literal("-1")).unwrap(),
+            parse_value(get_tokens_from_literal("-1")).unwrap().value,
             TomlValue::Int(-1)
         );
     }
