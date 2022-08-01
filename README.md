@@ -51,10 +51,18 @@ fn main() -> Result<(), TomlError> {
 }
 ```
 
+# Benchmarks
+```
+cargo bench
+open ./target/criterion/report/index.html
+```
+Testing shows Rtoml is slightly faster.
+
 # TODO
 - [ ] Table dot `.` format in table names
-- [ ] Validity testing
+- [ ] Table arrays
 - [ ] Serialise derive traits
+- [ ] Use toml testing repo to run all tests 
 
 # License
 MIT
