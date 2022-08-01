@@ -56,7 +56,6 @@ fn main() -> Result<(), TomlError> {
 cargo bench
 open ./target/criterion/report/index.html
 ```
-Testing shows Rtoml is slightly faster.
 
 # TODO
 - [ ] Table dot `.` format in table names
