@@ -22,23 +22,12 @@ pub fn parse_value(iter: RSlice) -> Result<ParsedValue, TomlError> {
             continue;
         }
 
-        match next {
-            Token::DoubleQuote | Token::SingleQuote => {
-                return parse_string(iter.as_slice(), *next);
-            }
-            Token::Sbo => {
-                let p = parse_array(iter.as_slice());
-                println!("{}", p.as_ref().unwrap().value);
-                return p;
-            }
-            Token::Cbo => return parse_inline_table(iter.as_slice()),
-            Token::Literal(x) => {
-                return check_for_other_values(x.trim(), iter.as_slice());
-            }
-            _ => {
-                dbg!(next);
-                return Err(TomlError::UnspecifiedValue(ErrLocation::new(iter)));
-            }
+        return match next {
+            Token::DoubleQuote | Token::SingleQuote => parse_string(iter.as_slice(), *next),
+            Token::Sbo => parse_array(iter.as_slice()),
+            Token::Cbo => parse_inline_table(iter.as_slice()),
+            Token::Literal(x) => check_for_other_values(x.trim(), iter.as_slice()),
+            _ => Err(TomlError::UnspecifiedValue(ErrLocation::new(iter))),
         };
     }
 
@@ -49,34 +38,42 @@ pub fn check_for_other_values<'a>(
     literal: &'a str,
     slice: RSlice<'a>,
 ) -> Result<ParsedValue<'a>, TomlError<'a>> {
-    let value = match literal {
-        "inf" => parse_num_or_date(literal, Hint::Inf, slice)?,
-        "nan" => parse_num_or_date(literal, Hint::Nan, slice)?,
-        "true" => ParsedValue::new(TomlValue::Boolean(true), RIter::from(slice)),
-        "false" => ParsedValue::new(TomlValue::Boolean(false), RIter::from(slice)),
+    match literal {
+        "inf" => Ok(ParsedValue::new(
+            TomlValue::Float(f64::INFINITY),
+            RIter::from(slice),
+        )),
+        "nan" => Ok(ParsedValue::new(
+            TomlValue::Float(f64::NAN),
+            RIter::from(slice),
+        )),
+        "true" => Ok(ParsedValue::new(
+            TomlValue::Boolean(true),
+            RIter::from(slice),
+        )),
+        "false" => Ok(ParsedValue::new(
+            TomlValue::Boolean(false),
+            RIter::from(slice),
+        )),
         _ => {
             let mut iter = literal.chars();
             let prefix = iter.next();
             if let Some(first_letter) = prefix {
                 match first_letter {
-                    '+' => parse_num_or_date(literal, Hint::Positive, slice)?,
-                    '-' => parse_num_or_date(literal, Hint::Negative, slice)?,
-                    n if n.is_digit(10) => parse_num_or_date(literal, Hint::Number, slice)?,
-                    _ => {
-                        return Err(TomlError::CannotParseValue(ErrLocation::new(RIter::from(
-                            slice,
-                        ))))
-                    }
+                    '+' => parse_num_or_date(literal, Hint::Positive, slice),
+                    '-' => parse_num_or_date(literal, Hint::Negative, slice),
+                    n if n.is_digit(10) => parse_num_or_date(literal, Hint::Number, slice),
+                    _ => Err(TomlError::CannotParseValue(ErrLocation::new(RIter::from(
+                        slice,
+                    )))),
                 }
             } else {
-                return Err(TomlError::UnspecifiedValue(ErrLocation::new(RIter::from(
+                Err(TomlError::UnspecifiedValue(ErrLocation::new(RIter::from(
                     slice,
-                ))));
+                ))))
             }
         }
-    };
-
-    Ok(value)
+    }
 }
 
 #[cfg(test)]

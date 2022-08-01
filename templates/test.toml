@@ -1,2 +1,80 @@
-[table]
-str2 = { arr = [1,2,3], int = 2 }
+str1 = "I'm a string."
+str2 = "You can \"quote\" me."
+str3 = "Name\tJos\u00E9\nLoc\tSF."
+
+re = '''\d{2} apps is t[wo]o many'''
+lines = '''
+The first newline is
+trimmed in raw strings.
+All other whitespace
+is preserved.
+'''
+
+str4 = """
+Roses are red
+Violets are blue"""
+
+str5 = """\
+  The quick brown \
+  fox jumps over \
+  the lazy dog.\
+  """
+
+str6 = """Here are two quotation marks: "". Simple enough."""
+str7 = """Here are three quotation marks: ""\"."""
+str8 = """Here are fifteen quotation marks: ""\"""\"""\"""\"""\"."""
+
+str9 = """"This," she said, "is just a pointless statement.""""
+
+name = { first = "Tom", last = "Preston-Werner" }
+point = { x = 1, y = 2 }
+animal = { name = "pug" }
+
+int1 = +99
+int2 = 42
+int3 = 0
+int4 = -17
+
+hex1 = 0xDEADBEEF
+hex2 = 0xdeadbeef
+hex3 = 0xdead_beef
+
+oct1 = 0o01234567
+oct2 = 0o755
+
+bin1 = 0b11010110
+
+float1 = +1.0
+float2 = 3.1415
+float3 = -0.01
+
+float4 = 5e+22
+float5 = 1e06
+float6 = -2E-2
+
+float7 = 6.626e-34
+
+float8 = 224_617.445_991_228
+
+infinite1 = inf
+infinite2 = +inf
+infinite3 = -inf
+
+not1 = nan
+not2 = +nan
+not3 = -nan
+
+bool1 = true
+bool2 = false
+
+odt1 = 1979-05-27T07:32:00Z
+odt2 = 1979-05-27T00:32:00-07:00
+odt3 = 1979-05-27T00:32:00.999999-07:00
+
+ldt1 = 1979-05-27T07:32:00
+ldt2 = 1979-05-27T00:32:00.999999
+
+ld1 = 1979-05-27
+
+lt1 = 07:32:00
+lt2 = 00:32:00.999999

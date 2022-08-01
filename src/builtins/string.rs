@@ -15,9 +15,8 @@ pub fn parse_string<'a>(
 
     if iter.next_if_eq(quote_type) && iter.next_if_eq(quote_type) {
         is_multiline = true;
-        if let Some((Token::LineBreak, _)) = iter.peek() {
-            iter.next();
-        }
+
+        iter.next_if_eq(Token::LineBreak);
     }
 
     if quote_type == Token::SingleQuote {
@@ -62,14 +61,18 @@ pub fn parse_string<'a>(
                                     ));
                                 }
                             } else if token.is_space() {
-                                string.push_str(trim_till_non_whitespace(&mut iter))
+                                trim_till_non_whitespace(&mut iter, &mut string);
                             } else {
                                 string.push(escape(first_char, iter.as_slice())?);
                                 string.push_str(&literal[1..]);
                             }
                         }
-                        Token::DoubleQuote | Token::BackSlash => string.push((*token).into()),
-                        Token::LineBreak => string.push_str(trim_till_non_whitespace(&mut iter)),
+                        Token::DoubleQuote | Token::BackSlash => {
+                            string.push((*token).into());
+                        }
+                        Token::LineBreak => {
+                            trim_till_non_whitespace(&mut iter, &mut string);
+                        }
                         _ => return Err(TomlError::UnknownEscapeSequence(ErrLocation::new(iter))),
                     }
                 }
@@ -149,15 +152,10 @@ fn escape<'a>(char: Option<&u8>, slice: RSlice<'a>) -> Result<char, TomlError<'a
         Some(b'n') => '\x0A',
         Some(b'f') => '\x0C',
         Some(b'r') => '\x0D',
-        Some(_) => {
+        Some(_) | None => {
             return Err(TomlError::UnknownEscapeSequence(ErrLocation::new(
                 RIter::from(slice),
             )))
-        }
-        None => {
-            return Err(TomlError::CannotParseValue(ErrLocation::new(RIter::from(
-                slice,
-            ))))
         }
     };
 
@@ -179,15 +177,23 @@ fn get_char_from_scalar<'a>(scalar: &str, slice: RSlice<'a>) -> Result<char, Tom
         })?
 }
 
-fn trim_till_non_whitespace<'a>(slice: &'a mut RIter) -> &'a str {
-    for (peek, _) in slice.by_ref() {
-        if *peek == Token::LineBreak || peek.is_space() {
-            continue;
-        } else if let Token::Literal(lit) = peek {
-            return lit.trim_start();
+fn trim_till_non_whitespace<'a>(iter: &mut RIter<'a>, string: &mut String) {
+    while let Some((peek, _)) = iter.peek() {
+        match peek {
+            peek if peek.is_space() => {
+                iter.next();
+            }
+            Token::LineBreak => {
+                iter.next();
+            }
+            Token::Literal(lit) => {
+                string.push_str(lit.trim_start());
+                iter.next();
+                break;
+            }
+            _ => break,
         }
     }
-    ""
 }
 
 #[cfg(test)]

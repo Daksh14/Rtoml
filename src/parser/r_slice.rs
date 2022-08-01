@@ -15,7 +15,7 @@ impl RIndex {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct RSlice<'a> {
     pub slice: &'a [TokenSized<'a>],
     pub index: RIndex,

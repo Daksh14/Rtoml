@@ -1,5 +1,4 @@
 use rtoml::prelude::*;
-use rtoml::{TomlKey, TomlValue};
 use std::convert::TryFrom;
 
 use std::error::Error;
@@ -13,20 +12,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     file.read_to_string(&mut data)?;
 
-    let toml = TomlValue::try_from(data.as_str())?;
+    let toml = TomlValue::try_from(data.as_str()).unwrap();
 
-    if let Some(table) = toml.as_table() {
-        if let Some(key_value) = table.get(&TomlKey::from("a_table")) {
-            assert_eq!(key.get(
-                TomlKey::from("value"),
-                TomlValue::Literal(String::from("hello, world"))
-            ))
-        }
-    }
-
-    println!("TOML\n\n{}\n", data);
-
-    println!("PARSED\n{}\n", TomlValue::parse(&data).unwrap());
+    println!("{:#?}", toml);
 
     Ok(())
 }

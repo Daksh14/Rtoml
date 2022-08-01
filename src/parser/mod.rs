@@ -10,8 +10,8 @@ pub mod r_iter;
 pub mod r_slice;
 
 pub struct ParsedValue<'a> {
-    pub(crate) value: TomlValue<'a>,
-    pub(crate) section: RIter<'a>,
+    pub value: TomlValue<'a>,
+    pub section: RIter<'a>,
 }
 
 impl<'a> ParsedValue<'a> {

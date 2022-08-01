@@ -1,14 +1,13 @@
+//! `RToml`
 extern crate core;
 
 use crate::error::TomlError;
 use crate::lexer::lex;
 use crate::parser::r_iter::RIter;
 use crate::parser::ParsedValue;
-use std::convert::TryFrom;
 
-use std::fmt::Write;
-use std::fmt::{format, write, Display, Formatter};
-use std::str::FromStr;
+use std::convert::TryFrom;
+use std::fmt::{write, Display, Formatter};
 
 use rustc_hash::FxHashMap;
 
@@ -18,10 +17,11 @@ mod parser;
 
 pub mod error;
 pub mod prelude {
-    pub use crate::TomlValue::*;
+    pub use crate::error::TomlError;
+    pub use crate::{DateTime, Table, TomlKey, TomlValue};
 }
 
-type Table<'a> = FxHashMap<TomlKey<'a>, TomlValue<'a>>;
+pub type Table<'a> = FxHashMap<TomlKey<'a>, TomlValue<'a>>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TomlValue<'a> {
@@ -140,7 +140,7 @@ impl Display for TomlValue<'_> {
         match self {
             TomlValue::Int(x) => fmt.write_str(x.to_string().as_str()),
             TomlValue::Float(x) => fmt.write_str(x.to_string().as_str()),
-            TomlValue::String(x) => fmt.write_str(x.to_string().as_str()),
+            TomlValue::String(x) => write!(fmt, "{:?}", x),
             TomlValue::Boolean(x) => fmt.write_str(x.to_string().as_str()),
             TomlValue::DateTime(x) => fmt.write_str(x.to_string().as_str()),
             TomlValue::Array(x) => {

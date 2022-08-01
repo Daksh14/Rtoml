@@ -1,9 +1,9 @@
 use crate::error::ErrLocation;
+use crate::parser::r_iter::RIter;
 use crate::parser::r_slice::RSlice;
+use crate::parser::ParsedValue;
 use crate::{DateTime, TomlError, TomlValue};
 
-use crate::parser::r_iter::RIter;
-use crate::parser::ParsedValue;
 use speedate;
 
 #[derive(PartialEq)]
@@ -21,12 +21,21 @@ pub fn parse_num_or_date<'a>(
     slice: RSlice<'a>,
 ) -> Result<ParsedValue<'a>, TomlError<'a>> {
     let literal = literal.replace('_', "");
+    let check = check_if_nan_or_inf(&literal[1..].as_bytes());
+    let prefix = literal.get(0..2);
+
+    if hint == Hint::Negative && check == Some(Hint::Inf) {
+        return Ok(ParsedValue::new(
+            TomlValue::Float(f64::INFINITY),
+            RIter::from(slice),
+        ));
+    }
 
     let value = match hint {
         Hint::Inf => TomlValue::Float(f64::INFINITY),
         Hint::Nan => TomlValue::Float(f64::NAN),
         Hint::Number => {
-            if let Ok(integer) = literal.parse() {
+            if let Some(integer) = get_integer(&literal) {
                 TomlValue::Int(integer)
             } else if let Ok(float) = literal.parse() {
                 TomlValue::Float(float)
@@ -42,38 +51,22 @@ pub fn parse_num_or_date<'a>(
                 ))));
             }
         }
-        Hint::Positive => {
-            let check = check_if_nan_or_inf(&literal[1..]);
-
-            if Some(Hint::Inf) == check {
-                TomlValue::Float(f64::INFINITY)
-            } else if Some(Hint::Nan) == check {
-                TomlValue::Float(f64::NAN)
-            } else if let Ok(integer) = literal.parse() {
-                TomlValue::Int(integer)
-            } else if let Ok(number) = literal.parse() {
-                TomlValue::Float(number)
-            } else {
-                return Err(TomlError::CannotParseValue(ErrLocation::new(RIter::from(
-                    slice,
-                ))));
-            }
-        }
-        Hint::Negative => {
-            let check = check_if_nan_or_inf(&literal[1..]);
-
-            if Some(Hint::Inf) == check {
-                TomlValue::Float(f64::NEG_INFINITY)
-            } else if Some(Hint::Nan) == check {
-                TomlValue::Float(f64::NAN)
-            } else if let Ok(integer) = literal.parse() {
-                TomlValue::Int(integer)
-            } else if let Ok(number) = literal.parse() {
-                TomlValue::Float(number)
-            } else {
-                return Err(TomlError::CannotParseValue(ErrLocation::new(RIter::from(
-                    slice,
-                ))));
+        Hint::Positive | Hint::Negative => {
+            match check {
+                // if it's negative and in, we return early
+                Some(Hint::Inf) => TomlValue::Float(f64::INFINITY),
+                Some(Hint::Nan) => TomlValue::Float(f64::NAN),
+                _ => {
+                    if let Some(integer) = get_integer(&literal) {
+                        TomlValue::Int(integer)
+                    } else if let Ok(float) = literal.parse() {
+                        TomlValue::Float(float)
+                    } else {
+                        return Err(TomlError::CannotParseValue(ErrLocation::new(RIter::from(
+                            slice,
+                        ))));
+                    }
+                }
             }
         }
     };
@@ -81,12 +74,26 @@ pub fn parse_num_or_date<'a>(
     Ok(ParsedValue::new(value, RIter::from(slice)))
 }
 
-pub fn check_if_nan_or_inf(literal: &str) -> Option<Hint> {
+fn check_if_nan_or_inf(literal: &[u8]) -> Option<Hint> {
     match literal {
-        "inf" => Some(Hint::Inf),
-        "nan" => Some(Hint::Nan),
+        b"inf" => Some(Hint::Inf),
+        b"nan" => Some(Hint::Nan),
         _ => None,
     }
+}
+
+fn get_integer(literal: &str) -> Option<i64> {
+    let prefix = literal.get(0..2);
+    let un_prefixed_literal = literal.get(2..);
+
+    // unwrap here is ok since literal.get(0..2) is not None
+    match prefix {
+        Some("0b") => i64::from_str_radix(&un_prefixed_literal.unwrap(), 2),
+        Some("0x") => i64::from_str_radix(&un_prefixed_literal.unwrap(), 16),
+        Some("0o") => i64::from_str_radix(&un_prefixed_literal.unwrap(), 8),
+        _ => i64::from_str_radix(literal, 10),
+    }
+    .ok()
 }
 
 #[cfg(test)]

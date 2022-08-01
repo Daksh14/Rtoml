@@ -1,18 +1,19 @@
-use simdutf8::basic::from_utf8;
+use self::Token::*;
+use crate::{TomlError, TomlKey};
+
 use std::fmt::{Display, Formatter};
+
+use simdutf8::basic::from_utf8;
+
+pub type TokenSized<'a> = (Token<'a>, usize);
 
 #[derive(Debug, PartialEq, Copy, Clone, Eq)]
 pub enum Token<'a> {
     Literal(&'a str),
-    // equals (=)
     Eq,
-    // square brackets open
     Sbo,
-    // curly brackets open
     Cbo,
-    // square brackets close
     Sbc,
-    // curly brackets close
     Cbc,
     Hash,
     DoubleQuote,
@@ -23,10 +24,11 @@ pub enum Token<'a> {
     Comma,
 }
 
-use crate::{TomlError, TomlKey};
-use Token::*;
-
 impl<'a> Token<'a> {
+    // validate TOML key naming structure
+    // key: https://toml.io/en/v1.0.0#keys
+    // table: https://toml.io/en/v1.0.0#table
+    // Naming rules for keys and table are the same
     pub fn is_valid_table_name_or_key(&self) -> bool {
         if let Literal(literal) = self {
             let trimmed = literal.trim();
@@ -54,6 +56,8 @@ impl<'a> Token<'a> {
         matches!(self, Literal(_))
     }
 
+    // convert a literal token into a key
+    // otherwise none
     pub fn as_key(&self) -> TomlKey {
         if let Literal(x) = self {
             TomlKey::Literal(x.trim())
@@ -67,9 +71,9 @@ impl<'a> Token<'a> {
     }
 }
 
-impl<'a> Into<char> for Token<'a> {
-    fn into(self) -> char {
-        match self {
+impl<'a> From<Token<'a>> for char {
+    fn from(token: Token) -> char {
+        match token {
             Literal(_) => ' ',
             Eq => '=',
             Sbo => '[',
@@ -87,13 +91,11 @@ impl<'a> Into<char> for Token<'a> {
     }
 }
 
-pub type TokenSized<'a> = (Token<'a>, usize);
-
 pub fn lex(data: &[u8]) -> Result<Vec<TokenSized>, TomlError> {
     let mut lexemes: Vec<TokenSized> = Vec::new();
     let mut peekable = data.iter().peekable();
 
-    let mut index = 0_usize;
+    let mut index = 0;
 
     while let Some(byte) = peekable.next() {
         let entry = match get_special_byte(*byte) {
