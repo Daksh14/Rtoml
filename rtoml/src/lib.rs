@@ -7,7 +7,7 @@ use crate::parser::r_iter::RIter;
 use crate::parser::ParsedValue;
 
 use std::convert::TryFrom;
-use std::fmt::{write, Display, Formatter};
+use std::fmt::{Display, Formatter};
 
 use rustc_hash::FxHashMap;
 
@@ -19,6 +19,7 @@ pub mod error;
 pub mod prelude {
     pub use crate::error::TomlError;
     pub use crate::{DateTime, Table, TomlKey, TomlValue};
+    pub use std::convert::TryFrom;
 }
 
 pub type Table<'a> = FxHashMap<TomlKey<'a>, TomlValue<'a>>;
@@ -169,13 +170,11 @@ impl<'a> TryFrom<&'a str> for TomlValue<'a> {
 
 impl Display for DateTime {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let x = match self {
-            DateTime::DateTime(x) => format!("{}", x),
-            DateTime::Date(x) => format!("{}", x),
-            DateTime::Time(x) => format!("{}", x),
-        };
-
-        write!(f, "{}", x)
+        match self {
+            DateTime::DateTime(x) => write!(f, "{}", x),
+            DateTime::Date(x) => write!(f, "{}", x),
+            DateTime::Time(x) => write!(f, "{}", x),
+        }
     }
 }
 

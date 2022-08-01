@@ -27,7 +27,10 @@ pub fn parse_value(iter: RSlice) -> Result<ParsedValue, TomlError> {
             Token::Sbo => parse_array(iter.as_slice()),
             Token::Cbo => parse_inline_table(iter.as_slice()),
             Token::Literal(x) => check_for_other_values(x.trim(), iter.as_slice()),
-            _ => Err(TomlError::UnspecifiedValue(ErrLocation::new(iter))),
+            _ => {
+                dbg!(next);
+                Err(TomlError::UnspecifiedValue(ErrLocation::new(iter)))
+            }
         };
     }
 

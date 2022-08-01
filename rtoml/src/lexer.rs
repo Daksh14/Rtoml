@@ -98,18 +98,29 @@ pub fn lex(data: &[u8]) -> Result<Vec<TokenSized>, TomlError> {
     let mut index = 0;
 
     while let Some(byte) = peekable.next() {
-        let entry = match get_special_byte(*byte) {
-            Some(x) => {
-                if let CarriageReturn = x {
-                    if let Some(LineBreak) = peekable.peek().and_then(|x| get_special_byte(**x)) {
-                        (LineBreak, 1)
+        match get_special_byte(*byte) {
+            Some(Hash) => {
+                while let Some(x) = peekable.peek() {
+                    if **x == b'\n' {
+                        break;
                     } else {
-                        (x, 1)
+                        index += 1;
+                        peekable.next();
                     }
-                } else {
-                    (x, 1)
                 }
             }
+            Some(CarriageReturn) => {
+                let entry = if let Some(b'\n') = peekable.peek() {
+                    peekable.next();
+                    index += 1;
+                    (LineBreak, 1)
+                } else {
+                    (CarriageReturn, 1)
+                };
+
+                lexemes.push(entry)
+            }
+            Some(x) => lexemes.push((x, 1)),
             _ => {
                 let mut alphabetic_index = 0;
                 while let Some(x) = peekable.peek() {
@@ -123,17 +134,16 @@ pub fn lex(data: &[u8]) -> Result<Vec<TokenSized>, TomlError> {
 
                 let relative_index = alphabetic_index + 1 + index;
                 let string_bytes = &data[index..relative_index];
+
                 index += alphabetic_index;
 
                 let string = from_utf8(string_bytes)?;
 
-                (Literal(string), string.len())
+                lexemes.push((Literal(string), string.len()))
             }
         };
 
         index += 1;
-
-        lexemes.push(entry);
     }
 
     Ok(lexemes)

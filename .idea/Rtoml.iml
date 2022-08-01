@@ -6,7 +6,13 @@
       <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/rtoml/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/rtoml/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/rtoml/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/toml-test/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
+      <excludeFolder url="file://$MODULE_DIR$/toml-test/target" />
+      <excludeFolder url="file://$MODULE_DIR$/rtoml/target" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

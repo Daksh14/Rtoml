@@ -90,7 +90,7 @@ pub fn parse_string<'a>(
             Token::Literal(str) => {
                 string.push_str(str);
             }
-            _ => (),
+            _ => string.push((*token).into()),
         }
     }
 

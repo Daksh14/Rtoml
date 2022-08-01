@@ -21,6 +21,12 @@ pub fn parse_array(slice: RSlice) -> Result<ParsedValue, TomlError> {
                     &[Token::Sbc, Token::Literal("")],
                 ));
             }
+            Token::LineBreak => {
+                iter.next();
+            }
+            n if n.is_space() => {
+                iter.next();
+            }
             _ => {
                 let parsed = parse_value(iter.as_slice())?;
                 vec.push(parsed.value);

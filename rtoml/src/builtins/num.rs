@@ -22,7 +22,6 @@ pub fn parse_num_or_date<'a>(
 ) -> Result<ParsedValue<'a>, TomlError<'a>> {
     let literal = literal.replace('_', "");
     let check = check_if_nan_or_inf(&literal[1..].as_bytes());
-    let prefix = literal.get(0..2);
 
     if hint == Hint::Negative && check == Some(Hint::Inf) {
         return Ok(ParsedValue::new(
