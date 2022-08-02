@@ -9,6 +9,17 @@ use rustc_hash::FxHashMap;
 pub mod r_iter;
 pub mod r_slice;
 
+macro_rules! expect {
+    ($iter : expr, $token : expr) => {
+        if !$iter.next_if_eq($token) {
+            return Err(TomlError::UnexpectedCharacter(
+                ErrLocation::new(RIter::from($iter.as_slice())),
+                &[$token],
+            ));
+        }
+    };
+}
+
 pub struct ParsedValue<'a> {
     pub value: TomlValue<'a>,
     pub section: RIter<'a>,
@@ -28,14 +39,10 @@ impl<'a> ParsedValue<'a> {
                 (Token::Sbo, _) => {
                     if let Some((next, _)) = iter.next() {
                         if *next == Token::Sbo {
+
                             // table array segment
                         } else if next.is_valid_table_name_or_key() {
-                            if !iter.next_if_eq(Token::Sbc) {
-                                return Err(TomlError::UnexpectedCharacter(
-                                    ErrLocation::new(RIter::from(iter.as_slice())),
-                                    &[Token::Sbc],
-                                ));
-                            }
+                            expect!(iter, Token::Sbc);
 
                             while let Some((linebreak, _)) = iter.peek() {
                                 if Token::LineBreak == *linebreak {

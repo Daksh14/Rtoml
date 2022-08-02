@@ -8,6 +8,7 @@ use std::string::String;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let mut buffer = String::new();
+
     std::io::stdin().read_to_string(&mut buffer)?;
 
     let toml = TomlValue::try_from(buffer.as_str()).unwrap();
