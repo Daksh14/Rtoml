@@ -1,19 +1,19 @@
-use rtoml::prelude::*;
 use std::convert::TryFrom;
-
-use serde_json::Value;
 use std::error::Error;
-use std::io::{BufRead, Read};
+use std::io::{stdin, BufRead, Read};
 use std::string::String;
+
+use rtoml::prelude::*;
+use serde_json::Value;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let mut buffer = String::new();
+    stdin().read_to_string(&mut buffer)?;
 
-    std::io::stdin().read_to_string(&mut buffer)?;
-
-    let toml = TomlValue::try_from(buffer.as_str()).unwrap();
-
-    println!("{}", to_json_value(toml));
+    println!(
+        "{}",
+        to_json_value(TomlValue::try_from(buffer.as_str()).expect("Parsing error"))
+    );
 
     Ok(())
 }
